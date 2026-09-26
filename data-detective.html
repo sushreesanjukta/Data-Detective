@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Data Detective</title>
+<style>
+:root{--bg:#12161f;--panel:#1b2130;--card:#232a3d;--acc:#e0a72c;--acc2:#4fb0ff;--tx:#f2f2f2;--mut:#9aa3b5;--good:#5bd18a;--bad:#e0605c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font-family:'Segoe UI',Arial,sans-serif}
+h1,h2,h3{font-family:Georgia,serif}
+button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}
+.wrap{max-width:960px;margin:0 auto;padding:24px}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center}
+.btn{background:var(--card);color:var(--tx);font-size:16px;font-weight:bold;padding:14px 28px;margin:8px;width:280px;border-radius:8px}
+.btn:hover{background:var(--acc);color:var(--bg)}
+.btn-gold{background:var(--acc);color:var(--bg);font-weight:bold}
+.card{background:var(--card);padding:14px 18px;border-radius:10px;margin:10px 0}
+.muted{color:var(--mut)}
+.gold{color:var(--acc)}
+.blue{color:var(--acc2)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 6px}
+.tab{background:var(--card);color:var(--tx);padding:10px 16px;border-radius:8px 8px 0 0;font-weight:bold}
+.tab.active{background:var(--acc);color:var(--bg)}
+.panel{display:none;background:var(--panel);border-radius:0 8px 8px 8px;padding:16px;min-height:300px}
+.panel.active{display:block}
+.diffcard{background:var(--card);padding:16px;border-radius:10px;margin:10px 0;max-width:600px}
+select,input[type=text]{padding:8px;border-radius:6px;border:none;margin-right:8px}
+textarea{width:100%;min-height:200px;background:var(--panel);color:var(--tx);border:none;border-radius:8px;padding:10px;font-size:14px}
+pre{background:var(--panel);padding:14px;border-radius:8px;white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px}
+.radio{display:block;margin:8px 0;font-size:15px}
+.qbtn{background:var(--card);color:var(--tx);font-size:12px;padding:8px 10px;margin:3px;border-radius:6px}
+.qbtn:hover{background:var(--acc2);color:var(--bg)}
+@media (prefers-color-scheme: light){:root:not([data-theme="light"]){--bg:#f4f5f8;--panel:#fff;--card:#e9ebf1;--tx:#1a1d24;--mut:#5a6172}}
+:root[data-theme="dark"]{--bg:#12161f;--panel:#1b2130;--card:#232a3d;--tx:#f2f2f2;--mut:#9aa3b5}
+</style></head>
+<body><div id="app"></div>
+<script>
+// ---------- CASE DATA ----------
+// Suspect order per case: [culprit, failsC1, failsC2, failsC4&5, failsC6]
+// flags f = [active, highAccess, serverRoom, idEnds47, fileAccess, search]
+const CASES=[
+{id:"1042",title:"Missing Sales Dataset",
+ desc:"At 8:45 PM, the company's confidential quarterly sales dataset vanished from the shared server. IT logs show the file was deleted, not just moved.",
+ window:"19:00 - 20:00",
+ clueTx:["The deleted file was accessed between 19:00 and 20:00.","Only employees with High Data Access could delete the file.","The security camera recorded someone entering the server room at 19:35.","IT confirms the employee's login ID ended with '47'.","The audit log shows sales_data.xlsx was opened right before it was deleted.","Browser history shows a search for ways to permanently erase files.","A colleague mentioned the suspect seemed tired that day. (possibly irrelevant)"],
+ sus:[
+  {n:"Rahul",id:"EMP-2247",dep:"Sales",role:"Sales Manager",log:"09:10",out:"20:15",loc:"Server Room",acc:"High",act:"Opened sales_data.xlsx at 19:40, then deleted it",f:[1,1,1,1,1,1]},
+  {n:"Ananya",id:"EMP-1108",dep:"Sales",role:"Sales Analyst",log:"09:00",out:"17:30",loc:"At home",acc:"Medium",act:"Logged out before the incident window",f:[0,0,0,0,0,0]},
+  {n:"Priya",id:"EMP-3390",dep:"HR",role:"HR Executive",log:"09:15",out:"19:50",loc:"Office Fl.2",acc:"Medium",act:"Reviewed leave applications",f:[1,0,0,0,0,0]},
+  {n:"Arjun",id:"EMP-4471",dep:"IT",role:"Data Engineer",log:"10:00",out:"20:30",loc:"Server Room",acc:"High",act:"Ran a routine server backup",f:[1,1,1,0,0,0]},
+  {n:"Sneha",id:"EMP-5547",dep:"Marketing",role:"Marketing Exec.",log:"09:30",out:"19:55",loc:"Server Room",acc:"High",act:"Searched 'how to permanently delete a file'",f:[1,1,1,1,1,0]}],
+ expl:"Rahul had High Data Access, entered the server room during the incident window, his ID ended in '47', and the audit log shows he opened and deleted the file himself."},
+{id:"2093",title:"Stolen Customer Report",
+ desc:"The customer database export was copied to an external drive and the original report was deleted from the shared drive at 6:30 PM.",
+ window:"18:00 - 19:00",
+ clueTx:["The customer report was last touched between 18:00 and 19:00.","Only employees with High Data Access could open the customer database.","A camera recorded someone entering the server room at 18:35.","IT confirms the employee's login ID ended with '47'.","A USB device was connected right before the file vanished.","Browser history shows a search about copying files to USB quickly.","A suspect was seen arguing with a colleague that morning. (possibly irrelevant)"],
+ sus:[
+  {n:"Vikram",id:"EMP-6647",dep:"IT",role:"IT Support",log:"08:45",out:"19:20",loc:"Server Room",acc:"High",act:"Plugged in a USB drive at 18:40, then deleted the report",f:[1,1,1,1,1,1]},
+  {n:"Meera",id:"EMP-7712",dep:"Support",role:"Support Exec.",log:"09:00",out:"17:45",loc:"At home",acc:"Low",act:"Logged out before the incident window",f:[0,0,0,0,0,0]},
+  {n:"Karan",id:"EMP-8801",dep:"Finance",role:"Finance Exec.",log:"09:10",out:"18:50",loc:"Office Fl.1",acc:"Medium",act:"Prepared monthly invoices",f:[1,0,0,0,0,0]},
+  {n:"Divya",id:"EMP-9047",dep:"Data",role:"Data Analyst",log:"10:00",out:"19:00",loc:"Server Room",acc:"High",act:"Reviewed dashboard metrics",f:[1,1,1,1,0,0]},
+  {n:"Rohit",id:"EMP-1147",dep:"Ops",role:"Ops Exec.",log:"09:20",out:"18:55",loc:"Server Room",acc:"High",act:"Searched 'how to copy files to USB quickly'",f:[1,1,1,1,1,0]}],
+ expl:"Vikram had High Data Access, entered the server room during the incident window, his ID ended in '47', and logs confirm he plugged in a USB drive right before deleting the report."},
+{id:"3157",title:"Deleted Attendance Records",
+ desc:"A month's worth of employee attendance records disappeared from the HR system right before payroll, around 5:15 PM.",
+ window:"17:00 - 18:00",
+ clueTx:["The attendance file was last touched between 17:00 and 18:00.","Only employees with High Data Access could edit the HR system.","A camera recorded someone entering the server room at 17:25.","IT confirms the employee's login ID ended with '47'.","The audit log shows attendance_master.xlsx was opened right before deletion.","Browser history shows a search about recovering deleted spreadsheets.","A suspect mentioned feeling stressed about the payroll deadline. (possibly irrelevant)"],
+ sus:[
+  {n:"Neha",id:"EMP-3347",dep:"HR",role:"HR Manager",log:"08:30",out:"18:10",loc:"Server Room",acc:"High",act:"Opened attendance_master.xlsx at 17:20, then deleted it",f:[1,1,1,1,1,1]},
+  {n:"Suresh",id:"EMP-4402",dep:"Admin",role:"Admin Asst.",log:"09:00",out:"16:30",loc:"At home",acc:"Low",act:"Logged out before the incident window",f:[0,0,0,0,0,0]},
+  {n:"Pooja",id:"EMP-5510",dep:"HR",role:"HR Trainee",log:"09:30",out:"17:45",loc:"Office Fl.3",acc:"Medium",act:"Filed new joiner paperwork",f:[1,0,0,0,0,0]},
+  {n:"Manish",id:"EMP-6647",dep:"IT",role:"IT Engineer",log:"09:00",out:"18:00",loc:"Server Room",acc:"High",act:"Fixed a printer connection issue",f:[1,1,1,1,0,0]},
+  {n:"Kavya",id:"EMP-7747",dep:"Payroll",role:"Payroll Exec.",log:"09:15",out:"17:50",loc:"Server Room",acc:"High",act:"Searched 'how to recover a deleted spreadsheet'",f:[1,1,1,1,1,0]}],
+ expl:"Neha had High Data Access, entered the server room during the incident window, her ID ended in '47', and the audit log shows she opened and deleted the file herself."},
+{id:"4268",title:"Fake Transaction Investigation",
+ desc:"Auditors discovered fake transactions inserted into the finance system, and the original transaction log was deleted around 3:45 PM to hide the trail.",
+ window:"15:00 - 16:00",
+ clueTx:["The transaction log was last touched between 15:00 and 16:00.","Only employees with High Data Access could edit the finance system.","A camera recorded someone entering the server room at 15:20.","IT confirms the employee's login ID ended with '47'.","The audit log shows transactions_log.xlsx was opened right before deletion.","Browser history shows a search about altering transaction timestamps.","A suspect had recently asked for a transfer to another department. (possibly irrelevant)"],
+ sus:[
+  {n:"Aditya",id:"EMP-8847",dep:"Finance",role:"Finance Exec.",log:"09:00",out:"16:30",loc:"Server Room",acc:"High",act:"Opened transactions_log.xlsx at 15:30, then deleted it",f:[1,1,1,1,1,1]},
+  {n:"Ritu",id:"EMP-9902",dep:"Finance",role:"Accountant",log:"09:15",out:"14:30",loc:"At home",acc:"Medium",act:"Logged out before the incident window",f:[0,0,0,0,0,0]},
+  {n:"Sameer",id:"EMP-1015",dep:"Audit",role:"Internal Auditor",log:"09:30",out:"15:50",loc:"Office Fl.4",acc:"Medium",act:"Reviewed last quarter's audit trail",f:[1,0,0,0,0,0]},
+  {n:"Nisha",id:"EMP-2247",dep:"IT",role:"Data Engineer",log:"09:45",out:"16:00",loc:"Server Room",acc:"High",act:"Ran a scheduled database sync",f:[1,1,1,1,0,0]},
+  {n:"Yash",id:"EMP-3347",dep:"Compliance",role:"Compliance Officer",log:"09:00",out:"15:55",loc:"Server Room",acc:"High",act:"Searched 'how to alter transaction timestamps'",f:[1,1,1,1,1,0]}],
+ expl:"Aditya had High Data Access, entered the server room during the incident window, his ID ended in '47', and the audit log shows he opened and deleted the transaction log himself."},
+{id:"5389",title:"Missing Financial Report",
+ desc:"The annual financial report, due for a board meeting the next morning, was deleted from the shared drive at approximately 9:10 PM.",
+ window:"21:00 - 22:00",
+ clueTx:["The financial report was last touched between 21:00 and 22:00.","Only employees with High Data Access could open the report.","A camera recorded someone entering the server room at 21:20.","IT confirms the employee's login ID ended with '47'.","The audit log shows annual_report.xlsx was opened right before deletion.","Browser history shows a search about shredding a file permanently.","A suspect was overheard complaining about working late. (possibly irrelevant)"],
+ sus:[
+  {n:"Kabir",id:"EMP-4447",dep:"Finance",role:"Senior Analyst",log:"10:00",out:"21:40",loc:"Server Room",acc:"High",act:"Opened annual_report.xlsx at 21:15, then deleted it",f:[1,1,1,1,1,1]},
+  {n:"Tanvi",id:"EMP-5502",dep:"Finance",role:"Junior Analyst",log:"10:15",out:"20:00",loc:"At home",acc:"Medium",act:"Logged out before the incident window",f:[0,0,0,0,0,0]},
+  {n:"Farhan",id:"EMP-6610",dep:"IT",role:"IT Admin",log:"10:30",out:"21:30",loc:"Office Fl.1",acc:"Medium",act:"Monitored server uptime dashboards",f:[1,0,0,0,0,0]},
+  {n:"Ishita",id:"EMP-7747",dep:"Data",role:"Data Scientist",log:"10:45",out:"21:50",loc:"Server Room",acc:"High",act:"Trained a forecasting model",f:[1,1,1,1,0,0]},
+  {n:"Varun",id:"EMP-8847",dep:"Ops",role:"Ops Manager",log:"10:00",out:"21:45",loc:"Server Room",acc:"High",act:"Searched 'how to shred a file permanently'",f:[1,1,1,1,1,0]}],
+ expl:"Kabir had High Data Access, entered the server room during the incident window, his ID ended in '47', and the audit log shows he opened and deleted the annual report himself."}
+];
+const HINTS=["Hint 1: Check who had access to the deleted file.","Hint 2: Look at employees active during the incident window.","Hint 3: Compare access level, server room entry, and login ID together.","Hint 4: One suspect matches almost every clue but not all. Keep checking."];
+const DIFF={Easy:{s:3,c:3},Medium:{s:4,c:5},Hard:{s:5,c:7}};
+
+// ---------- STATE ----------
+let S={screen:"welcome",diff:"Medium",cs:null,sus:[],clues:[],reviewed:new Set(),hints:0,hintIdx:0,start:0,accIdx:-1};
+
+function pickCase(){return CASES[Math.floor(Math.random()*CASES.length)];}
+function suspMatches(s,ci){return ci<6? !!s.f[ci] : true;} // clue idx 6 = red herring
+function matchAll(sus,clueCount){return sus.filter(s=>{for(let i=0;i<clueCount;i++){if(!suspMatches(s,i))return false;}return true;});}
+function score(cluesReviewed,hints,correct,secs){let sc=cluesReviewed*10+hints*(-10); if(correct){sc+=100; if(secs<=90)sc+=20;}else{sc-=50;} return Math.max(sc,0);}
+function accuracy(reviewed,total,correct){let ca=total? (reviewed/total)*100:0; let bonus=correct?100:0; return Math.round(Math.min((ca+bonus)/2,100));}
+function rank(sc){if(sc>=150)return"Master Data Detective";if(sc>=100)return"Data Detective";if(sc>=50)return"Junior Detective";return"Rookie Detective";}
+
+const app=document.getElementById('app');
+function render(){app.innerHTML=SCREENS[S.screen]();}
+
+const SCREENS={
+welcome:()=>`<div class="wrap center">
+<h1 class="gold" style="font-size:2.2em">🔍 DATA DETECTIVE</h1>
+<p class="muted">Can you solve the case?</p>
+<button class="btn" onclick="go('difficulty')">🕵️ Start Investigation</button>
+<button class="btn" onclick="go('howto')">📖 How to Play</button>
+<p class="muted" style="margin-top:40px;font-size:12px">A browser detective game — Python/Tkinter portfolio project ported to the web</p>
+</div>`,
+howto:()=>`<div class="wrap">
+<h2 class="gold">📖 How to Play</h2>
+<p>You are a Data Detective. A company file has been deleted, and several employees are suspects.</p>
+<p>1. Open <b>Suspects</b> to review each employee's profile.<br>
+2. Open <b>Evidence</b> to read every clue.<br>
+3. Use <b>Data Analysis</b> to filter and cross-check suspects.<br>
+4. Write reasoning in <b>Notes</b>.<br>
+5. Go to <b>Accusation</b> and select the guilty suspect.</p>
+<p class="muted">A wrong accusation costs points, and hints cost points too. Solve it fast and correctly for the highest rank!</p>
+<button class="btn" onclick="go('welcome')">⬅ Back</button></div>`,
+difficulty:()=>`<div class="wrap center">
+<h2 class="gold">Choose Your Difficulty</h2>
+<div class="diffcard"><b>🟢 Easy</b><p class="muted">3 suspects, 3 clues — a gentle first case.</p><button class="btn-gold btn" onclick="startCase('Easy')">Play Easy</button></div>
+<div class="diffcard"><b>🟡 Medium</b><p class="muted">4 suspects, 5 clues — some misleading info.</p><button class="btn-gold btn" onclick="startCase('Medium')">Play Medium</button></div>
+<div class="diffcard"><b>🔴 Hard</b><p class="muted">5 suspects, 7 clues, includes a red herring.</p><button class="btn-gold btn" onclick="startCase('Hard')">Play Hard</button></div>
+<button class="btn" onclick="go('welcome')">⬅ Back</button></div>`,
+dashboard:()=>{const c=S.cs;
+ return `<div class="wrap">
+ <h2 class="gold">CASE #${c.id} — ${c.title}</h2>
+ <p class="muted">Difficulty: ${S.diff}</p>
+ <p>${c.desc}</p>
+ <div class="tabs">
+  <div class="tab active" id="t0" onclick="tab(0)">📋 Suspects</div>
+  <div class="tab" id="t1" onclick="tab(1)">🔍 Evidence</div>
+  <div class="tab" id="t2" onclick="tab(2)">📊 Analysis</div>
+  <div class="tab" id="t3" onclick="tab(3)">📝 Notes</div>
+  <div class="tab" id="t4" onclick="tab(4)">🚨 Accusation</div>
+ </div>
+ <div class="panel active" id="p0">${S.sus.map(s=>`<div class="card"><b class="blue">${s.n} — ${s.role} (${s.dep})</b><br>ID: ${s.id} | Access: ${s.acc}<br>Login ${s.log} / Logout ${s.out} | Location: ${s.loc}<br>Activity: ${s.act}</div>`).join('')}</div>
+ <div class="panel" id="p1"><p class="muted">Incident window: ${c.window}</p>${S.clues.map((t,i)=>`<div class="card"><b class="gold">🔎 Evidence #${i+1}</b><br>${t}</div>`).join('')}</div>
+ <div class="panel" id="p2">
+  <div>Department: <select id="depSel">${[...new Set(S.sus.map(s=>s.dep))].map(d=>`<option>${d}</option>`).join('')}</select>
+  <button class="qbtn" onclick="analyze('dep')">Filter</button>
+  Employee ID: <input type="text" id="idSearch" style="width:100px">
+  <button class="qbtn" onclick="analyze('id')">Search</button></div>
+  <div style="margin:8px 0">
+  <button class="qbtn" onclick="analyze('active')">Active during incident</button>
+  <button class="qbtn" onclick="analyze('high')">High access</button>
+  <button class="qbtn" onclick="analyze('unusual')">Unusual activity</button>
+  <button class="qbtn" onclick="analyze('compare')">Compare login/logout</button>
+  <button class="qbtn" onclick="analyze('all')">Suspects matching ALL clues</button></div>
+  <pre id="anOut">Run a filter above to see results here.</pre></div>
+ <div class="panel" id="p3"><textarea id="notesArea" placeholder="Write your detective notes here...">${S.notes||''}</textarea></div>
+ <div class="panel" id="p4"><p><b>Who do you believe is responsible?</b></p>
+  ${S.sus.map((s,i)=>`<label class="radio"><input type="radio" name="acc" value="${i}" onchange="S.accIdx=${i}"> ${s.n} (${s.role})</label>`).join('')}
+  <button class="btn-gold btn" onclick="accuse()">🚨 MAKE ACCUSATION</button></div>
+ <div style="margin-top:14px">
+  <button class="qbtn" onclick="hint()">💡 Hint (-10 pts)</button>
+  <button class="qbtn" onclick="go('welcome')">🏠 Quit to Menu</button></div>
+ </div>`;},
+result:()=>{const r=S.result;
+ return `<div class="wrap">
+ <h1 style="color:${r.ok?'var(--good)':'var(--bad)'}">${r.ok?'🎉 CASE SOLVED!':'❌ WRONG SUSPECT'}</h1>
+ ${!r.ok?`<p>${r.name} is innocent. Review the clues again in Evidence and Data Analysis.</p>`:''}
+ <pre>${r.report}</pre>
+ <div>
+ ${!r.ok?'<button class="qbtn" onclick="go(\'dashboard\')">🔎 Keep Investigating</button>':''}
+ <button class="qbtn" onclick="saveReport()">📄 Save Investigation Report</button>
+ <button class="qbtn" onclick="go('difficulty')">🔁 New Case</button>
+ <button class="qbtn" onclick="go('welcome')">🏠 Main Menu</button></div></div>`;}
+};
+
+function go(scr){S.screen=scr;render();}
+function tab(i){for(let j=0;j<5;j++){document.getElementById('t'+j).classList.toggle('active',j===i);document.getElementById('p'+j).classList.toggle('active',j===i);}
+ if(i===1)S.clues.forEach((_,idx)=>S.reviewed.add(idx));
+ if(i===3){/* notes stay in DOM */}
+}
+function startCase(d){S.diff=d;S.cs=pickCase();const n=DIFF[d];
+ S.sus=S.cs.sus.slice(0,n.s);S.clues=S.cs.clueTx.slice(0,n.c);
+ S.reviewed=new Set();S.hints=0;S.hintIdx=0;S.accIdx=-1;S.notes='';S.start=Date.now();
+ go('dashboard');}
+function analyze(mode){const out=document.getElementById('anOut');let lines=[];
+ if(mode==='dep'){const d=document.getElementById('depSel').value;const r=S.sus.filter(s=>s.dep===d);
+  lines.push(`Employees in '${d}' department: ${r.length}\n`);r.forEach(s=>lines.push(`  - ${s.n} (${s.role})`));}
+ else if(mode==='id'){const q=(document.getElementById('idSearch').value||'').toLowerCase();const r=S.sus.filter(s=>s.id.toLowerCase().includes(q));
+  lines.push(`Employees matching ID search '${q}': ${r.length}\n`);r.forEach(s=>lines.push(`  - ${s.n} (${s.id})`));}
+ else if(mode==='active'){const r=S.sus.filter(s=>s.f[0]);lines.push(`Employees active during incident: ${r.length}\n`);r.forEach(s=>lines.push(`  - ${s.n} (login ${s.log} - logout ${s.out})`));}
+ else if(mode==='high'){const r=S.sus.filter(s=>s.acc==='High');lines.push(`High access employees: ${r.length}\n`);r.forEach(s=>lines.push(`  - ${s.n} (${s.acc} access)`));}
+ else if(mode==='unusual'){const r=S.sus.filter(s=>s.f[2]||s.f[4]);lines.push(`Employees with unusual activity: ${r.length}\n`);r.forEach(s=>lines.push(`  - ${s.n}: ${s.act}`));}
+ else if(mode==='compare'){lines.push('Login / Logout comparison:\n');S.sus.forEach(s=>lines.push(`  - ${s.n.padEnd(10)} login ${s.log}   logout ${s.out}`));}
+ else if(mode==='all'){const r=matchAll(S.sus,S.clues.length);lines.push(`Employees matching all clues: ${r.length}\n`);r.forEach(s=>lines.push(`  - ${s.n}`));if(r.length===1)lines.push(`\nPossible suspect:\n  ${r[0].n}`);}
+ out.textContent=lines.join('\n');}
+function hint(){if(S.hintIdx>=HINTS.length){alert('No more hints for this case.');return;}alert('💡 '+HINTS[S.hintIdx]);S.hints++;S.hintIdx++;}
+function accuse(){if(S.accIdx<0){alert('Please select a suspect first.');return;}
+ const notesEl=document.getElementById('notesArea');if(notesEl)S.notes=notesEl.value;
+ const accused=S.sus[S.accIdx];const ok=(accused.n===S.cs.sus[0].n);
+ const secs=Math.floor((Date.now()-S.start)/1000);
+ const sc=score(S.reviewed.size,S.hints,ok,secs);const acc=accuracy(S.reviewed.size,S.clues.length,ok);const rk=rank(sc);
+ const mm=String(Math.floor(secs/60)).padStart(2,'0'),ss=String(secs%60).padStart(2,'0');
+ let rep=`════════════════════════════\n      INVESTIGATION REPORT\n════════════════════════════\n\nCase: #${S.cs.id}\nCase Type: ${S.cs.title}\nDifficulty: ${S.diff}\n\nSuspect Identified: ${accused.n}\n\n`;
+ if(ok){rep+='Evidence Matched:\n';S.clues.forEach((t,i)=>{if(suspMatches(accused,i))rep+=`  ✓ ${t}\n`;});rep+=`\nExplanation: ${S.cs.expl}\n`;}
+ else{rep+=`Correct Suspect: ${S.cs.sus[0].n}\nExplanation: ${S.cs.expl}\n`;}
+ rep+=`\nFinal Score: ${sc}\nAccuracy: ${acc}%\nTime Taken: ${mm}:${ss}\n\nDetective Rank:\n${rk.toUpperCase()}\n\n════════════════════════════`;
+ S.result={ok,name:accused.n,report:rep};go('result');}
+async function saveReport(){const downloads=await claude.use("downloads").catch(()=>null);
+ const fname=`investigation_report_case_${S.cs.id}.txt`;
+ if(downloads){try{await downloads.save({filename:fname,data:S.result.report});}catch(e){alert('Save was not completed.');}}
+ else{const blob=new Blob([S.result.report],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();}}
+render();
+</script></body></html>
